@@ -1,0 +1,184 @@
+<html>
+<head>
+<script language="javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+<script language="javascript"> 
+
+	function uploadArquivos(){
+		//arquivo
+		var f = document.getElementById("file");
+		//nome usuario digitado
+		var nomeUsu = document.getElementById("nomeUsuario").value;
+		//valida se campos estao preenchidos
+		if(nomeUsu != '' && f.value != '') {		
+	        var file = f.files[0];
+	        var size = file.size;
+	        var sliceSize = 1048576;
+	        var start = 0;
+	        var i = 1;
+	        //numero de paotes
+	        var totalPacotes = (size/sliceSize);
+		    if(totalPacotes < 1){
+		    	totalPacotes = 1;
+		    }else {
+		    	totalPacotes = Math.ceil(totalPacotes);
+		    }
+	
+	        setTimeout(loop, 1);
+	
+	        function loop() {
+	          var end = start + sliceSize;
+	          
+	          if (size - end < 0) {
+	            end = size;
+	          }
+	          
+	          var s = slice(file, start, end);
+	
+	          send(s, start, end, i, totalPacotes);
+			  i++;
+	          if (end < size) {
+	            start += sliceSize;
+	            setTimeout(loop, 1);
+	          }
+	        }
+		} else {
+			alert('O arquivo e o nome do usuario são obrigatórios.')
+		}
+	}
+
+	//
+	function send(piece, start, end, numPacote, totalPacotes) {
+		var f = document.getElementById("file");
+		var form = document.getElementById("upload_form");
+		var formdata = new FormData();
+		var nomeUsu = document.getElementById("nomeUsuario").value;
+    	var xhr = new XMLHttpRequest();
+		//endereco api
+	    xhr.open('POST', 'http://localhost:8080/backend/rest/arquivo/upload', true);
+		//dados do form
+	    formdata.append('file', piece);
+	    formdata.append('numPacote', numPacote);
+	    formdata.append('totalPacotes', totalPacotes);
+	    formdata.append('fileSize',f.files[0].size);
+	    formdata.append('nomeUsuario', nomeUsu);
+	    formdata.append('nomeArquivo', f.files[0]);
+	
+	    xhr.onreadystatechange = function (oEvent) {        	
+	        if (xhr.readyState === 4) {  
+	            if (xhr.status === 400) {  
+	            	alert('Arquivo já inserido!');  
+	            } else {  
+	               console.log("Erro ao executar", xhr.statusText);  
+	            }  
+	        }  else {
+	        		inicialiaTela();
+	        }
+	    }; 
+	
+	    xhr.send(formdata);
+  }
+
+  function slice(file, start, end) {
+    var slice = file.mozSlice ? file.mozSlice :
+                file.webkitSlice ? file.webkitSlice :
+                file.slice ? file.slice : noop;
+    
+    return slice.bind(file)(start, end);
+  }
+
+  function noop() {
+    
+  }
+
+	function atualizaLista() {
+		//criar ul
+		var listaUl = document.createElement('UL');	
+	    $.ajax({
+	            type: 'GET',
+	            url:"http://localhost:8080/backend/rest/arquivo/listar-todos-arquivos",
+	            data: $(this).serialize(),
+	            dataType: 'json',
+	            success: function (data) {
+	            	if(data !== null && data !== undefined && data.length > 0){
+	    				for(var i = 0; i < data.length; i++ ){
+	    					//cria elemento para a lista
+	    					var elLi = document.createElement('LI');
+	    					//cria link para download
+	    					var elA = document.createElement('A');
+	    					//chama stream rest
+	    					elA.href = 'http://localhost:8080/backend/rest/arquivo/download/' + data[i].id;
+	    					elA.innerHTML = 'Baixar';
+	    					var textnode = document.createTextNode(montaDescricaoArquivo(data[i]));						
+	    					elLi.appendChild(textnode);
+	    					elLi.appendChild(elA);
+	    					//adiciona elemento a lista
+	    					listaUl.appendChild(elLi);
+	    				}
+	               	}
+	            },
+	            complete: function (data) {
+	                //limpa lista
+	            	document.getElementById('divArquivos').innerHTML = '';
+	            	//adiciona nova lista
+	            	document.getElementById('divArquivos').appendChild(listaUl);
+	                // Proxima chamada
+	                setTimeout(atualizaLista, interval);
+	            },
+	            error: function(err){
+	    			console.log(err);
+	            }
+	    });
+	}
+	
+	
+
+	function montaDescricaoArquivo(obj) {
+		return obj.nomeArquivo + ' (upload feito por  ' + obj.nomeUsuario + ', upload ' + obj.statusUpload + ', enviou ' + obj.quantidadeBlocos + ' blocos no tempo total de ' + obj.tempoEnvioMilisegundos + ' milisegundos) ';
+	}
+
+	function downloadArquivo(id){
+		$.ajax({
+		    type: "GET",
+		    url:"http://localhost:8080/backend/rest/arquivo/download/" + id,
+		    contentType: false,
+		    cache: false,
+		    success: function(response)
+		    {
+		        window.open(response);
+		    },
+		    error: function (XMLHttpRequest, textStatus, errorThrown) 
+		    {
+		        alert('Um erro ocorreu enquanto o sistema tentava abrir o arquivo ' 
+		              + getAjaxErrorString(textStatus, errorThrown));
+		    }
+		});
+	}
+	
+	function inicialiaTela(){
+		document.getElementById("file").value = '';
+        document.getElementById("nomeUsuario").value = '';
+	}
+	
+	//atualiza a cada 1 segundo
+	var interval = 1000;// 1000 = 1 segundo
+	setTimeout(atualizaLista, interval);
+
+</script>
+</head>
+<body>
+
+<form id="upload_form" action="" method="post" enctype="multipart/form-data">
+	<p>
+    	<label for="file">Selecione o arquivo:</label>
+    	<input id="file" type="file" name="file" required>
+   	</p>
+   	<p>
+		<label for="nomeUsuario">Nome do usuário:</label> 
+		<input id="nomeUsuario" placeholder="Digite seu nome" type="text" name="nomeUsuario" required/>
+	</p>
+	<input id="submit_btn" type="button" onclick="uploadArquivos()" value="Upload do arquivo">
+    <div id="divArquivos"></div>
+</form>
+<div></div>
+</body>
+</html>
